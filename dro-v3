@@ -1,0 +1,106 @@
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local Workspace = game:GetService("Workspace")
+local LocalPlayer = Players.LocalPlayer
+
+local isRunning = false
+
+-- 1. Create Small GUI
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "DeltaObbyTween"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = (gethui and gethui()) or game:GetService("CoreGui")
+
+local Frame = Instance.new("Frame", ScreenGui)
+Frame.Size = UDim2.new(0, 140, 0, 70)
+Frame.Position = UDim2.new(0.5, -70, 0.35, 0)
+Frame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+Frame.Active, Frame.Draggable = true, true
+Instance.new("UICorner", Frame).CornerRadius = UDim.new(0, 8)
+
+local Title = Instance.new("TextLabel", Frame)
+Title.Size = UDim2.new(1, 0, 0, 25)
+Title.BackgroundTransparency = 1
+Title.Text = "Smooth Obby Fly"
+Title.TextColor3 = Color3.fromRGB(220, 220, 220)
+Title.TextSize = 12
+Title.Font = Enum.Font.SourceSansBold
+
+local ToggleBtn = Instance.new("TextButton", Frame)
+ToggleBtn.Size = UDim2.new(0.85, 0, 0, 32)
+ToggleBtn.Position = UDim2.new(0.075, 0, 0.42, 0)
+ToggleBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+ToggleBtn.Text = "OFF (NO)"
+ToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+ToggleBtn.TextSize = 13
+ToggleBtn.Font = Enum.Font.SourceSansBold
+Instance.new("UICorner", ToggleBtn).CornerRadius = UDim.new(0, 6)
+
+-- 2. Fetch Checkpoints Correctly
+local function getSortedCheckpoints()
+    local cps = {}
+    for _, obj in ipairs(Workspace:GetDescendants()) do
+        if obj:IsA("SpawnLocation") or (obj:IsA("BasePart") and tonumber(obj.Name)) then
+            table.insert(cps, obj)
+        end
+    end
+    
+    -- Sort 1, 2, 3 strictly
+    table.sort(cps, function(a, b)
+        local numA = tonumber(a.Name:match("%d+")) or 0
+        local numB = tonumber(b.Name:match("%d+")) or 0
+        return numA < numB
+    end)
+    return cps
+end
+
+-- 3. Smooth Fly (Tween) Function
+local function startSmoothObby()
+    task.spawn(function()
+        local checkpoints = getSortedCheckpoints()
+        
+        for _, cp in ipairs(checkpoints) do
+            if not isRunning then break end
+            
+            local char = LocalPlayer.Character
+            local hrp = char and char:FindFirstChild("HumanoidRootPart")
+            
+            if hrp and cp then
+                local targetCFrame = cp.CFrame * CFrame.new(0, 3, 0)
+                local distance = (hrp.Position - targetCFrame.Position).Magnitude
+                
+                -- คำนวณความเร็วบิน (ยิ่งไกล ยิ่งใช้เวลาลอยไป เพื่อไม่ให้ Anti-Cheat ตรวจจับ)
+                local flyTime = distance / 45 -- ปรับความเร็วตรงนี้ได้ (ยิ่งตัวเลขน้อยยิ่งช้าและปลอดภัย)
+                if flyTime < 0.5 then flyTime = 0.5 end
+                
+                local tweenInfo = TweenInfo.new(flyTime, Enum.EasingStyle.Linear)
+                local tween = TweenService:Create(hrp, tweenInfo, {CFrame = targetCFrame})
+                
+                tween:Play()
+                tween.Completed:Wait() -- รอจนกว่าจะบินไปถึงจุดเซฟ
+                
+                -- พักเหยียบจุดเซฟนิดนึง
+                task.wait(0.3)
+            end
+        end
+        
+        if isRunning then
+            isRunning = false
+            ToggleBtn.Text = "OFF (NO)"
+            ToggleBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+        end
+    end)
+end
+
+-- 4. Toggle Logic
+ToggleBtn.MouseButton1Click:Connect(function()
+    isRunning = not isRunning
+    if isRunning then
+        ToggleBtn.Text = "ON (YES)"
+        ToggleBtn.BackgroundColor3 = Color3.fromRGB(50, 180, 80)
+        startSmoothObby()
+    else
+        ToggleBtn.Text = "OFF (NO)"
+        ToggleBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+    end
+end)
